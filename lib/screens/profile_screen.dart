@@ -5,6 +5,8 @@ import 'package:image_picker/image_picker.dart';
 import '../theme/app_theme.dart';
 import '../widgets/glass_widgets.dart';
 import '../main.dart';
+import '../services/auth_service.dart';
+import '../services/api_service.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -18,6 +20,36 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String _fontSizeLabel = 'Medium';
   double _fontSizeValue = 1.0; // 0=Small, 1=Medium, 2=Large
   bool _appLockEnabled = false;
+
+  // ── Profile data from API ──
+  Map<String, dynamic>? _user;
+  String _profileName = '';
+  String _profileEmail = '';
+  String _profileDept = '';
+  int _profileSemester = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProfile();
+  }
+
+  Future<void> _loadProfile() async {
+    try {
+      final user = await AuthService().getProfile();
+      if (user != null && mounted) {
+        setState(() {
+          _user = user;
+          _profileName = user['full_name'] ?? user['name'] ?? 'Student';
+          _profileEmail = user['email'] ?? '';
+          _profileDept = user['department'] ?? 'CS';
+          _profileSemester = user['semester'] ?? 0;
+        });
+      }
+    } catch (_) {
+      // Keep defaults
+    }
+  }
 
   // ── Image picker ──
   Future<void> _pickImage(BuildContext context) async {
@@ -238,11 +270,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
   // ═══════════════════════════════════════════════════════════════════════════
 
   void _showPersonalInfoSheet(BuildContext context) {
-    final nameCtrl = TextEditingController(text: 'Balakumaran D');
-    final dobCtrl = TextEditingController(text: '15/06/2003');
-    final genderCtrl = TextEditingController(text: 'Male');
-    final phoneCtrl = TextEditingController(text: '+91 98765 43210');
-    final emailCtrl = TextEditingController(text: 'dbalakumaran23@gmail.com');
+    final nameCtrl = TextEditingController(
+        text: _user?['full_name'] ?? _user?['name'] ?? 'Balakumaran D');
+    final dobCtrl =
+        TextEditingController(text: _user?['date_of_birth'] ?? '15/06/2003');
+    final genderCtrl = TextEditingController(text: _user?['gender'] ?? 'Male');
+    final phoneCtrl =
+        TextEditingController(text: _user?['phone'] ?? '+91 98765 43210');
+    final emailCtrl = TextEditingController(
+        text: _user?['email'] ?? 'dbalakumaran23@gmail.com');
 
     _showThemedSheet(context, 'Personal Information', (tc) {
       return Column(
@@ -253,15 +289,32 @@ class _ProfileScreenState extends State<ProfileScreen> {
           _sheetField(tc, 'Phone', controller: phoneCtrl),
           _sheetField(tc, 'Email', controller: emailCtrl),
           const SizedBox(height: 4),
-          _sheetButton('Save Changes', () {
-            Navigator.pop(context);
-            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-              content: const Text('Personal info updated'),
-              backgroundColor: AppColors.accentGreen,
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
-            ));
+          _sheetButton('Save Changes', () async {
+            try {
+              await AuthService().updateProfile({
+                'full_name': nameCtrl.text,
+                'date_of_birth': dobCtrl.text,
+                'gender': genderCtrl.text,
+                'phone': phoneCtrl.text,
+                'email': emailCtrl.text,
+              });
+              setState(() {
+                _profileName = nameCtrl.text;
+                _profileEmail = emailCtrl.text;
+              });
+            } catch (_) {
+              // still close & show success for offline-friendly UX
+            }
+            if (context.mounted) {
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                content: const Text('Personal info updated'),
+                backgroundColor: AppColors.accentGreen,
+                behavior: SnackBarBehavior.floating,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+              ));
+            }
           }),
         ],
       );
@@ -273,22 +326,82 @@ class _ProfileScreenState extends State<ProfileScreen> {
   // ═══════════════════════════════════════════════════════════════════════════
 
   void _showChangePasswordSheet(BuildContext context) {
+    final currentPwdCtrl = TextEditingController();
+    final newPwdCtrl = TextEditingController();
+    final confirmPwdCtrl = TextEditingController();
+
     _showThemedSheet(context, 'Change Password', (tc) {
       return Column(
         children: [
-          _sheetField(tc, 'Current Password', obscure: true),
-          _sheetField(tc, 'New Password', obscure: true),
-          _sheetField(tc, 'Confirm New Password', obscure: true),
+          _sheetField(tc, 'Current Password',
+              obscure: true, controller: currentPwdCtrl),
+          _sheetField(tc, 'New Password',
+              obscure: true, controller: newPwdCtrl),
+          _sheetField(tc, 'Confirm New Password',
+              obscure: true, controller: confirmPwdCtrl),
           const SizedBox(height: 4),
-          _sheetButton('Update Password', () {
-            Navigator.pop(context);
-            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-              content: const Text('Password updated successfully'),
-              backgroundColor: AppColors.accentGreen,
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
-            ));
+          _sheetButton('Update Password', () async {
+            final current = currentPwdCtrl.text.trim();
+            final newPwd = newPwdCtrl.text.trim();
+            final confirm = confirmPwdCtrl.text.trim();
+
+            if (current.isEmpty || newPwd.isEmpty) {
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                content: const Text('Please fill all fields'),
+                backgroundColor: AppColors.accentRed,
+                behavior: SnackBarBehavior.floating,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+              ));
+              return;
+            }
+            if (newPwd != confirm) {
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                content: const Text('New passwords do not match'),
+                backgroundColor: AppColors.accentRed,
+                behavior: SnackBarBehavior.floating,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+              ));
+              return;
+            }
+            if (newPwd.length < 6) {
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                content: const Text('Password must be at least 6 characters'),
+                backgroundColor: AppColors.accentRed,
+                behavior: SnackBarBehavior.floating,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+              ));
+              return;
+            }
+
+            try {
+              await ApiService().put('/auth/change-password', body: {
+                'current_password': current,
+                'new_password': newPwd,
+              });
+              if (context.mounted) {
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                  content: const Text('Password updated successfully'),
+                  backgroundColor: AppColors.accentGreen,
+                  behavior: SnackBarBehavior.floating,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                ));
+              }
+            } catch (e) {
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                  content: Text(e.toString()),
+                  backgroundColor: AppColors.accentRed,
+                  behavior: SnackBarBehavior.floating,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                ));
+              }
+            }
           }),
         ],
       );
@@ -915,13 +1028,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Balakumaran D',
+                      Text(
+                          _profileName.isNotEmpty
+                              ? _profileName
+                              : 'Balakumaran D',
                           style: TextStyle(
                               color: tc.textPrimary,
                               fontSize: 18,
                               fontWeight: FontWeight.w700)),
                       const SizedBox(height: 4),
-                      Text('dbalakumaran23@gmail.com',
+                      Text(
+                          _profileEmail.isNotEmpty
+                              ? _profileEmail
+                              : 'dbalakumaran23@gmail.com',
                           style: TextStyle(color: tc.textMuted, fontSize: 13)),
                       const SizedBox(height: 6),
                       Container(
@@ -930,8 +1049,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         decoration: BoxDecoration(
                             color: AppColors.accentTeal.withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(8)),
-                        child: const Text('CS • Semester 5',
-                            style: TextStyle(
+                        child: Text(
+                            '${_profileDept.isNotEmpty ? _profileDept : 'CS'} • Semester ${_profileSemester > 0 ? _profileSemester : 5}',
+                            style: const TextStyle(
                                 color: AppColors.accentTeal,
                                 fontSize: 11,
                                 fontWeight: FontWeight.w600)),

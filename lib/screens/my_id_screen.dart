@@ -2,9 +2,60 @@
 import 'package:flutter/material.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import '../theme/app_theme.dart';
+import '../services/auth_service.dart';
 
-class MyIdScreen extends StatelessWidget {
+class MyIdScreen extends StatefulWidget {
   const MyIdScreen({super.key});
+
+  @override
+  State<MyIdScreen> createState() => _MyIdScreenState();
+}
+
+class _MyIdScreenState extends State<MyIdScreen> {
+  String _name = '';
+  String _role = 'STUDENT';
+  String _idNumber = '';
+  String _department = '';
+  String _validUpto = '31/05/2026';
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProfile();
+  }
+
+  Future<void> _loadProfile() async {
+    try {
+      final user = await AuthService().getProfile();
+      if (user != null && mounted) {
+        setState(() {
+          _name = user['full_name'] ?? user['name'] ?? 'Student';
+          _role = (user['role'] ?? 'STUDENT').toString().toUpperCase();
+          _idNumber = user['roll_number'] ?? user['id']?.toString() ?? '';
+          _department = user['department'] ?? 'Computer Science';
+          _validUpto = user['valid_upto'] ?? '31/05/2026';
+          _isLoading = false;
+        });
+      } else {
+        _useFallback();
+      }
+    } catch (_) {
+      _useFallback();
+    }
+  }
+
+  void _useFallback() {
+    if (!mounted) return;
+    setState(() {
+      _name = 'Balakumaran D';
+      _role = 'POST GRADUATION';
+      _idNumber = 'S67480';
+      _department = 'Computer Science';
+      _validUpto = '31/05/2026';
+      _isLoading = false;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -133,29 +184,39 @@ class MyIdScreen extends StatelessWidget {
           const SizedBox(height: 1),
 
           // ── Name & Role ──
-          const Text(
-            'Balakumaran D',
-            style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.w800,
-                color: AppColors.textPrimary),
-          ),
-          const SizedBox(height: 6),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
-            decoration: BoxDecoration(
-              color: AppColors.accentTeal.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: const Text(
-              'POST GRADUATION',
-              style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.accentTeal,
-                  letterSpacing: 1.4),
-            ),
-          ),
+          _isLoading
+              ? const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 16),
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : Column(
+                  children: [
+                    Text(
+                      _name,
+                      style: const TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.textPrimary),
+                    ),
+                    const SizedBox(height: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 14, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: AppColors.accentTeal.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        _role,
+                        style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.accentTeal,
+                            letterSpacing: 1.4),
+                      ),
+                    ),
+                  ],
+                ),
 
           const SizedBox(height: 22),
 
@@ -172,7 +233,8 @@ class MyIdScreen extends StatelessWidget {
               ),
               child: Center(
                 child: QrImageView(
-                  data: 'PUNOVA-S67480-BALAKUMARAN-D',
+                  data:
+                      'PUNOVA-$_idNumber-${_name.replaceAll(' ', '-').toUpperCase()}',
                   version: QrVersions.auto,
                   size: 128,
                   backgroundColor: Colors.white,
@@ -220,9 +282,9 @@ class MyIdScreen extends StatelessWidget {
                   children: [
                     Expanded(
                         child: _detailBlock(
-                            'ID NUMBER', 'S67480', CrossAxisAlignment.start)),
+                            'ID NUMBER', _idNumber, CrossAxisAlignment.start)),
                     _detailBlock(
-                        'VALID UPTO', '31/05/2026', CrossAxisAlignment.end),
+                        'VALID UPTO', _validUpto, CrossAxisAlignment.end),
                   ],
                 ),
                 const SizedBox(height: 18),
@@ -244,14 +306,14 @@ class MyIdScreen extends StatelessWidget {
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(color: AppColors.glassBorder),
                       ),
-                      child: const Row(
+                      child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.computer_rounded,
+                          const Icon(Icons.computer_rounded,
                               size: 16, color: AppColors.accentTeal),
-                          SizedBox(width: 8),
-                          Text('Computer Science',
-                              style: TextStyle(
+                          const SizedBox(width: 8),
+                          Text(_department,
+                              style: const TextStyle(
                                   fontSize: 13,
                                   fontWeight: FontWeight.w600,
                                   color: AppColors.textPrimary)),

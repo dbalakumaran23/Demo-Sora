@@ -1,34 +1,107 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../widgets/glass_widgets.dart';
+import '../services/api_service.dart';
+import '../models/service_item.dart';
 
-class ServicesScreen extends StatelessWidget {
+class ServicesScreen extends StatefulWidget {
   const ServicesScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final tc = Tc.of(context);
-    final services = [
-      _ServiceData('Papido', 'Food Ordering', Icons.fastfood_rounded,
+  State<ServicesScreen> createState() => _ServicesScreenState();
+}
+
+class _ServicesScreenState extends State<ServicesScreen> {
+  List<_ServiceDisplayData> _services = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchServices();
+  }
+
+  Future<void> _fetchServices() async {
+    setState(() => _isLoading = true);
+    try {
+      final response = await ApiService().get('/services');
+      final servicesJson = response['services'] as List;
+      setState(() {
+        _services = servicesJson.map((j) {
+          final s = ServiceItem.fromJson(j);
+          return _ServiceDisplayData(
+            s.name,
+            s.subtitle ?? '',
+            _iconFromName(s.iconName),
+            _gradientFromColors(s.gradientStart, s.gradientEnd),
+          );
+        }).toList();
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _services = _staticServices();
+        _isLoading = false;
+      });
+    }
+  }
+
+  IconData _iconFromName(String? name) {
+    const iconMap = {
+      'fastfood_rounded': Icons.fastfood_rounded,
+      'account_balance_wallet_rounded': Icons.account_balance_wallet_rounded,
+      'local_laundry_service_rounded': Icons.local_laundry_service_rounded,
+      'edit_rounded': Icons.edit_rounded,
+      'print_rounded': Icons.print_rounded,
+      'local_hospital_rounded': Icons.local_hospital_rounded,
+    };
+    return iconMap[name] ?? Icons.miscellaneous_services_rounded;
+  }
+
+  LinearGradient _gradientFromColors(String? start, String? end) {
+    Color parseHex(String? hex, Color fallback) {
+      if (hex == null || hex.isEmpty) return fallback;
+      hex = hex.replaceFirst('#', '');
+      return Color(int.parse('FF$hex', radix: 16));
+    }
+
+    return LinearGradient(
+      colors: [
+        parseHex(start, const Color(0xFF00D2FF)),
+        parseHex(end, const Color(0xFF00F0B5))
+      ],
+    );
+  }
+
+  List<_ServiceDisplayData> _staticServices() {
+    return [
+      _ServiceDisplayData('Papido', 'Food Ordering', Icons.fastfood_rounded,
           const LinearGradient(colors: [Color(0xFFFF6B35), Color(0xFFF7931E)])),
-      _ServiceData(
+      _ServiceDisplayData(
           'Plink It',
           'Digital Payments',
           Icons.account_balance_wallet_rounded,
           const LinearGradient(colors: [Color(0xFF6366F1), Color(0xFF818CF8)])),
-      _ServiceData(
+      _ServiceDisplayData(
           'Laundry',
           'Schedule Pickup',
           Icons.local_laundry_service_rounded,
           const LinearGradient(colors: [Color(0xFF14B8A6), Color(0xFF2DD4BF)])),
-      _ServiceData('Stationery', 'Order Supplies', Icons.edit_rounded,
+      _ServiceDisplayData('Stationery', 'Order Supplies', Icons.edit_rounded,
           const LinearGradient(colors: [Color(0xFFEC4899), Color(0xFFF472B6)])),
-      _ServiceData('Print Shop', 'Print & Copy', Icons.print_rounded,
+      _ServiceDisplayData('Print Shop', 'Print & Copy', Icons.print_rounded,
           const LinearGradient(colors: [Color(0xFFF59E0B), Color(0xFFFBBF24)])),
-      _ServiceData('Health', 'Medical Services', Icons.local_hospital_rounded,
+      _ServiceDisplayData(
+          'Health',
+          'Medical Services',
+          Icons.local_hospital_rounded,
           const LinearGradient(colors: [Color(0xFF22C55E), Color(0xFF4ADE80)])),
     ];
+  }
 
+  @override
+  Widget build(BuildContext context) {
+    final tc = Tc.of(context);
     return Scaffold(
       backgroundColor: tc.bg,
       body: Container(
@@ -38,11 +111,19 @@ class ServicesScreen extends StatelessWidget {
             children: [
               _buildAppBar(context, tc),
               Expanded(
-                child: ListView.builder(
-                  padding: const EdgeInsets.fromLTRB(20, 10, 20, 20),
-                  itemCount: services.length,
-                  itemBuilder: (_, i) => _serviceCard(tc, services[i]),
-                ),
+                child: _isLoading
+                    ? const Center(
+                        child: CircularProgressIndicator(
+                            color: AppColors.accentTeal))
+                    : RefreshIndicator(
+                        onRefresh: _fetchServices,
+                        color: AppColors.accentTeal,
+                        child: ListView.builder(
+                          padding: const EdgeInsets.fromLTRB(20, 10, 20, 20),
+                          itemCount: _services.length,
+                          itemBuilder: (_, i) => _serviceCard(tc, _services[i]),
+                        ),
+                      ),
               ),
             ],
           ),
@@ -70,7 +151,7 @@ class ServicesScreen extends StatelessWidget {
     );
   }
 
-  Widget _serviceCard(Tc tc, _ServiceData s) {
+  Widget _serviceCard(Tc tc, _ServiceDisplayData s) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: GlassCard(
@@ -109,10 +190,10 @@ class ServicesScreen extends StatelessWidget {
   }
 }
 
-class _ServiceData {
+class _ServiceDisplayData {
   final String name;
   final String subtitle;
   final IconData icon;
   final LinearGradient gradient;
-  const _ServiceData(this.name, this.subtitle, this.icon, this.gradient);
+  const _ServiceDisplayData(this.name, this.subtitle, this.icon, this.gradient);
 }

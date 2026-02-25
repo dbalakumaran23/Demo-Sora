@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../widgets/glass_widgets.dart';
+import '../services/api_service.dart';
+import '../models/timetable_entry.dart';
 
 class TimetableScreen extends StatefulWidget {
   const TimetableScreen({super.key});
@@ -10,34 +12,92 @@ class TimetableScreen extends StatefulWidget {
 }
 
 class _TimetableScreenState extends State<TimetableScreen> {
-  int _selectedDay = 0;
   final List<String> _days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  final List<String> _daysFull = [
+    'Monday',
+    'Tuesday',
+    'Wednesday',
+    'Thursday',
+    'Friday',
+    'Saturday'
+  ];
+  int _selectedDay = 0;
+  List<TimetableEntry> _entries = [];
+  bool _isLoading = true;
 
-  final Map<int, List<_ClassItem>> _schedule = {
-    0: [
-      _ClassItem('Data Structures', '09:00 – 10:00', 'Dr. Kumar', 'Room 301',
-          AppColors.accentTeal),
-      _ClassItem('Operating Systems', '10:15 – 11:15', 'Dr. Patel', 'Room 204',
-          AppColors.accentPurple),
-      _ClassItem('DBMS Lab', '11:30 – 13:00', 'Prof. Singh', 'Lab B2',
-          AppColors.accentOrange),
-      _ClassItem('Computer Networks', '14:00 – 15:00', 'Dr. Sharma', 'Room 102',
-          AppColors.accentPink),
-    ],
-    1: [
-      _ClassItem('Mathematics III', '09:00 – 10:00', 'Dr. Mishra', 'Room 105',
-          AppColors.accentGreen),
-      _ClassItem('Data Structures Lab', '10:15 – 12:15', 'Dr. Kumar', 'Lab A1',
-          AppColors.accentTeal),
-      _ClassItem('Operating Systems', '13:00 – 14:00', 'Dr. Patel', 'Room 204',
-          AppColors.accentPurple),
-    ],
-  };
+  @override
+  void initState() {
+    super.initState();
+    // Default to current day of week
+    final now = DateTime.now();
+    _selectedDay = (now.weekday - 1).clamp(0, 5);
+    _fetchTimetable();
+  }
+
+  Future<void> _fetchTimetable() async {
+    setState(() => _isLoading = true);
+    try {
+      final response =
+          await ApiService().get('/timetable?day=${_daysFull[_selectedDay]}');
+      final ttJson = response['timetable'] as List;
+      setState(() {
+        _entries = ttJson.map((j) => TimetableEntry.fromJson(j)).toList();
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _entries = _staticTimetable();
+        _isLoading = false;
+      });
+    }
+  }
+
+  List<TimetableEntry> _staticTimetable() {
+    // Monday fallback
+    return [
+      TimetableEntry(
+          id: '1',
+          dayOfWeek: 'Monday',
+          subject: 'Data Structures',
+          timeSlot: '09:00 – 10:00',
+          faculty: 'Dr. Kumar',
+          room: 'Room 301',
+          accentColor: '#00D2FF'),
+      TimetableEntry(
+          id: '2',
+          dayOfWeek: 'Monday',
+          subject: 'Operating Systems',
+          timeSlot: '10:15 – 11:15',
+          faculty: 'Dr. Patel',
+          room: 'Room 204',
+          accentColor: '#7C3AED'),
+      TimetableEntry(
+          id: '3',
+          dayOfWeek: 'Monday',
+          subject: 'DBMS Lab',
+          timeSlot: '11:30 – 13:00',
+          faculty: 'Prof. Singh',
+          room: 'Lab B2',
+          accentColor: '#EC4899'),
+      TimetableEntry(
+          id: '4',
+          dayOfWeek: 'Monday',
+          subject: 'Computer Networks',
+          timeSlot: '14:00 – 15:00',
+          faculty: 'Dr. Sharma',
+          room: 'Room 102',
+          accentColor: '#22C55E'),
+    ];
+  }
+
+  Color _parseHex(String hex) {
+    hex = hex.replaceFirst('#', '');
+    return Color(int.parse('FF$hex', radix: 16));
+  }
 
   @override
   Widget build(BuildContext context) {
     final tc = Tc.of(context);
-    final classes = _schedule[_selectedDay] ?? [];
     return Scaffold(
       backgroundColor: tc.bg,
       body: Container(
@@ -46,20 +106,24 @@ class _TimetableScreenState extends State<TimetableScreen> {
           child: Column(
             children: [
               _buildAppBar(context, tc),
-              const SizedBox(height: 10),
+              const SizedBox(height: 8),
               _buildDaySelector(tc),
-              const SizedBox(height: 18),
+              const SizedBox(height: 16),
               Expanded(
-                child: classes.isEmpty
-                    ? Center(
-                        child: Text('No classes scheduled',
-                            style:
-                                TextStyle(color: tc.textMuted, fontSize: 15)))
-                    : ListView.builder(
-                        padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-                        itemCount: classes.length,
-                        itemBuilder: (_, i) => _classCard(tc, classes[i]),
-                      ),
+                child: _isLoading
+                    ? const Center(
+                        child: CircularProgressIndicator(
+                            color: AppColors.accentTeal))
+                    : _entries.isEmpty
+                        ? Center(
+                            child: Text('No classes today',
+                                style: TextStyle(
+                                    color: tc.textMuted, fontSize: 16)))
+                        : ListView.builder(
+                            padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+                            itemCount: _entries.length,
+                            itemBuilder: (_, i) => _classCard(tc, _entries[i]),
+                          ),
               ),
             ],
           ),
@@ -89,32 +153,37 @@ class _TimetableScreenState extends State<TimetableScreen> {
 
   Widget _buildDaySelector(Tc tc) {
     return SizedBox(
-      height: 52,
+      height: 44,
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 20),
         itemCount: _days.length,
         itemBuilder: (_, i) {
-          final isSelected = _selectedDay == i;
-          return GestureDetector(
-            onTap: () => setState(() => _selectedDay = i),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              width: 56,
-              margin: const EdgeInsets.only(right: 10),
-              decoration: BoxDecoration(
-                gradient: isSelected ? AppColors.primaryGradient : null,
-                color: isSelected ? null : tc.glassWhite,
-                borderRadius: BorderRadius.circular(14),
-                border: isSelected ? null : Border.all(color: tc.glassBorder),
-              ),
-              alignment: Alignment.center,
-              child: Text(
-                _days[i],
-                style: TextStyle(
-                  color: isSelected ? Colors.white : tc.textSecondary,
-                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                  fontSize: 14,
+          final isSelected = i == _selectedDay;
+          return Padding(
+            padding: const EdgeInsets.only(right: 10),
+            child: GestureDetector(
+              onTap: () {
+                setState(() => _selectedDay = i);
+                _fetchTimetable();
+              },
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                decoration: BoxDecoration(
+                  gradient: isSelected ? AppColors.primaryGradient : null,
+                  color: isSelected ? null : tc.glassWhite,
+                  borderRadius: BorderRadius.circular(14),
+                  border: isSelected ? null : Border.all(color: tc.glassBorder),
+                ),
+                child: Text(
+                  _days[i],
+                  style: TextStyle(
+                    color: isSelected ? Colors.white : tc.textSecondary,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                  ),
                 ),
               ),
             ),
@@ -124,70 +193,65 @@ class _TimetableScreenState extends State<TimetableScreen> {
     );
   }
 
-  Widget _classCard(Tc tc, _ClassItem cls) {
+  Widget _classCard(Tc tc, TimetableEntry entry) {
+    final accent = _parseHex(entry.accentColor);
     return Padding(
-      padding: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.only(bottom: 12),
       child: GlassCard(
-        padding: EdgeInsets.zero,
-        child: IntrinsicHeight(
-          child: Row(
-            children: [
-              Container(
-                  width: 4,
-                  decoration: BoxDecoration(
-                      color: cls.color,
-                      borderRadius: const BorderRadius.only(
-                          topLeft: Radius.circular(20),
-                          bottomLeft: Radius.circular(20)))),
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            Container(
+              width: 4,
+              height: 60,
+              decoration: BoxDecoration(
+                color: accent,
+                borderRadius: BorderRadius.circular(4),
+              ),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(entry.subject,
+                      style: TextStyle(
+                          color: tc.textPrimary,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 15)),
+                  const SizedBox(height: 6),
+                  Row(
                     children: [
-                      Text(cls.name,
-                          style: TextStyle(
-                              color: tc.textPrimary,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 15)),
-                      const SizedBox(height: 8),
-                      Row(children: [
-                        Icon(Icons.access_time_rounded,
-                            size: 14, color: cls.color),
-                        const SizedBox(width: 6),
-                        Text(cls.time,
-                            style: TextStyle(
-                                color: tc.textSecondary, fontSize: 13)),
-                      ]),
-                      const SizedBox(height: 6),
-                      Row(children: [
-                        Icon(Icons.person_rounded,
-                            size: 14, color: tc.textMuted),
-                        const SizedBox(width: 6),
-                        Text(cls.teacher,
-                            style:
-                                TextStyle(color: tc.textMuted, fontSize: 12)),
-                        const SizedBox(width: 16),
-                        Icon(Icons.room_rounded, size: 14, color: tc.textMuted),
-                        const SizedBox(width: 4),
-                        Text(cls.room,
-                            style:
-                                TextStyle(color: tc.textMuted, fontSize: 12)),
-                      ]),
+                      Icon(Icons.access_time_rounded,
+                          size: 14, color: tc.textMuted),
+                      const SizedBox(width: 4),
+                      Text(entry.timeSlot,
+                          style: TextStyle(color: tc.textMuted, fontSize: 12)),
+                      const SizedBox(width: 16),
+                      Icon(Icons.person_rounded, size: 14, color: tc.textMuted),
+                      const SizedBox(width: 4),
+                      Flexible(
+                        child: Text(entry.faculty ?? '',
+                            style: TextStyle(color: tc.textMuted, fontSize: 12),
+                            overflow: TextOverflow.ellipsis),
+                      ),
                     ],
                   ),
-                ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Icon(Icons.room_rounded, size: 14, color: tc.textMuted),
+                      const SizedBox(width: 4),
+                      Text(entry.room ?? '',
+                          style: TextStyle(color: tc.textMuted, fontSize: 12)),
+                    ],
+                  ),
+                ],
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
   }
-}
-
-class _ClassItem {
-  final String name, time, teacher, room;
-  final Color color;
-  const _ClassItem(this.name, this.time, this.teacher, this.room, this.color);
 }

@@ -6,6 +6,8 @@ import 'screens/map_screen.dart';
 import 'screens/my_id_screen.dart';
 import 'screens/alerts_screen.dart';
 import 'screens/profile_screen.dart';
+import 'screens/login_screen.dart';
+import 'services/auth_service.dart';
 
 import 'package:google_fonts/google_fonts.dart';
 
@@ -86,7 +88,7 @@ class _CampusConnectAppState extends State<CampusConnectApp> {
   }
 }
 
-/// Entry point: shows Welcome screen first, then navigates to Dashboard.
+/// Entry point: Login → Welcome → Dashboard flow.
 class AppEntry extends StatefulWidget {
   const AppEntry({super.key});
 
@@ -95,16 +97,46 @@ class AppEntry extends StatefulWidget {
 }
 
 class _AppEntryState extends State<AppEntry> {
-  bool _showWelcome = true;
+  // 0 = checking, 1 = login, 2 = welcome, 3 = dashboard
+  int _screen = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkAuth();
+  }
+
+  Future<void> _checkAuth() async {
+    final isLoggedIn = await AuthService().isLoggedIn();
+    setState(() => _screen = isLoggedIn ? 3 : 1);
+  }
 
   @override
   Widget build(BuildContext context) {
-    if (_showWelcome) {
-      return WelcomeScreen(
-        onGetStarted: () => setState(() => _showWelcome = false),
-      );
+    switch (_screen) {
+      case 0:
+        // Loading / splash
+        final tc = Tc.of(context);
+        return Scaffold(
+          backgroundColor: tc.bg,
+          body: Container(
+            decoration: BoxDecoration(gradient: tc.bgGradient),
+            child: const Center(
+              child: CircularProgressIndicator(color: AppColors.accentTeal),
+            ),
+          ),
+        );
+      case 1:
+        return LoginScreen(
+          onLoginSuccess: () => setState(() => _screen = 2),
+        );
+      case 2:
+        return WelcomeScreen(
+          onGetStarted: () => setState(() => _screen = 3),
+        );
+      default:
+        return const DashboardShell();
     }
-    return const DashboardShell();
   }
 }
 

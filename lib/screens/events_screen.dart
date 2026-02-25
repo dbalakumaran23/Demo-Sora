@@ -1,9 +1,76 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../widgets/glass_widgets.dart';
+import '../services/api_service.dart';
+import '../models/event.dart';
 
-class EventsScreen extends StatelessWidget {
+class EventsScreen extends StatefulWidget {
   const EventsScreen({super.key});
+
+  @override
+  State<EventsScreen> createState() => _EventsScreenState();
+}
+
+class _EventsScreenState extends State<EventsScreen> {
+  List<Event> _events = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchEvents();
+  }
+
+  Future<void> _fetchEvents() async {
+    setState(() => _isLoading = true);
+    try {
+      final response = await ApiService().get('/events');
+      final eventsJson = response['events'] as List;
+      setState(() {
+        _events = eventsJson.map((j) => Event.fromJson(j)).toList();
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _events = _staticEvents();
+        _isLoading = false;
+      });
+    }
+  }
+
+  List<Event> _staticEvents() {
+    return [
+      Event(
+          id: '1',
+          title: 'Tech Fest 2024',
+          description: 'Annual tech fest with hackathon and coding contests.',
+          eventDate: DateTime(2024, 3, 15),
+          venue: 'Main Auditorium',
+          category: 'tech'),
+      Event(
+          id: '2',
+          title: 'Cultural Night',
+          description: 'An evening of music, dance, and drama performances.',
+          eventDate: DateTime(2024, 3, 20),
+          venue: 'Open Air Theatre',
+          category: 'cultural'),
+      Event(
+          id: '3',
+          title: 'Sports Day',
+          description:
+              'Annual sports competition. Cricket, football, athletics.',
+          eventDate: DateTime(2024, 3, 25),
+          venue: 'Sports Complex',
+          category: 'sports'),
+      Event(
+          id: '4',
+          title: 'Alumni Meet',
+          description: 'Connect with alumni from all departments.',
+          eventDate: DateTime(2024, 4, 5),
+          venue: 'Convention Hall',
+          category: 'networking'),
+    ];
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -17,31 +84,19 @@ class EventsScreen extends StatelessWidget {
             children: [
               _buildAppBar(context, tc),
               Expanded(
-                child: ListView(
-                  padding: const EdgeInsets.fromLTRB(20, 10, 20, 20),
-                  children: [
-                    _eventCard(
-                        tc,
-                        'Tech Fest 2024',
-                        'Annual technology festival',
-                        'Mar',
-                        '15',
-                        'Main Auditorium',
-                        AppColors.accentTeal),
-                    _eventCard(
-                        tc,
-                        'Cultural Night',
-                        'Music, dance & drama',
-                        'Mar',
-                        '20',
-                        'Open Air Theatre',
-                        AppColors.accentPurple),
-                    _eventCard(tc, 'Sports Day', 'Inter-department tournaments',
-                        'Mar', '25', 'Sports Complex', AppColors.accentOrange),
-                    _eventCard(tc, 'Alumni Meet', 'Networking with alumni',
-                        'Apr', '05', 'Convention Hall', AppColors.accentPink),
-                  ],
-                ),
+                child: _isLoading
+                    ? const Center(
+                        child: CircularProgressIndicator(
+                            color: AppColors.accentTeal))
+                    : RefreshIndicator(
+                        onRefresh: _fetchEvents,
+                        color: AppColors.accentTeal,
+                        child: ListView.builder(
+                          padding: const EdgeInsets.fromLTRB(20, 10, 20, 20),
+                          itemCount: _events.length,
+                          itemBuilder: (_, i) => _eventCard(tc, _events[i]),
+                        ),
+                      ),
               ),
             ],
           ),
@@ -69,8 +124,15 @@ class EventsScreen extends StatelessWidget {
     );
   }
 
-  Widget _eventCard(Tc tc, String title, String desc, String month, String day,
-      String location, Color color) {
+  Widget _eventCard(Tc tc, Event event) {
+    final colors = [
+      AppColors.accentTeal,
+      AppColors.accentPurple,
+      AppColors.accentGreen,
+      AppColors.accentOrange,
+    ];
+    final color = colors[_events.indexOf(event) % colors.length];
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 14),
       child: GlassCard(
@@ -78,24 +140,29 @@ class EventsScreen extends StatelessWidget {
         child: Row(
           children: [
             Container(
-              width: 56,
-              height: 64,
+              width: 60,
+              height: 65,
               decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(14)),
+                color: color.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(14),
+              ),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text(month,
-                      style: TextStyle(
-                          color: color,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600)),
-                  Text(day,
-                      style: TextStyle(
-                          color: color,
-                          fontSize: 22,
-                          fontWeight: FontWeight.w800)),
+                  Text(
+                    event.formattedDate.split(' ').last,
+                    style: TextStyle(
+                        color: color,
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800),
+                  ),
+                  Text(
+                    event.formattedDate.split(' ').first,
+                    style: TextStyle(
+                        color: color,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600),
+                  ),
                 ],
               ),
             ),
@@ -104,26 +171,30 @@ class EventsScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title,
+                  Text(event.title,
                       style: TextStyle(
                           color: tc.textPrimary,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600)),
+                          fontWeight: FontWeight.w600,
+                          fontSize: 16)),
                   const SizedBox(height: 4),
-                  Text(desc,
-                      style: TextStyle(color: tc.textSecondary, fontSize: 13)),
-                  const SizedBox(height: 8),
-                  Row(children: [
-                    Icon(Icons.location_on_rounded,
-                        size: 14, color: tc.textMuted),
-                    const SizedBox(width: 4),
-                    Text(location,
-                        style: TextStyle(color: tc.textMuted, fontSize: 12)),
-                  ]),
+                  Text(event.description ?? '',
+                      style: TextStyle(
+                          color: tc.textSecondary, fontSize: 12, height: 1.4),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      Icon(Icons.location_on_rounded,
+                          size: 14, color: tc.textMuted),
+                      const SizedBox(width: 4),
+                      Text(event.venue ?? '',
+                          style: TextStyle(color: tc.textMuted, fontSize: 11)),
+                    ],
+                  ),
                 ],
               ),
             ),
-            Icon(Icons.bookmark_border_rounded, color: tc.textMuted, size: 24),
           ],
         ),
       ),

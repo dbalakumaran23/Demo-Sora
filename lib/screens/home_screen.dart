@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
 import '../widgets/glass_widgets.dart';
+import '../services/api_service.dart';
+import '../services/auth_service.dart';
 import 'forum_screen.dart';
 import 'services_screen.dart';
 import 'events_screen.dart';
@@ -8,8 +10,96 @@ import 'circulars_screen.dart';
 import 'timetable_screen.dart';
 import 'result_screen.dart';
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  String _userName = 'Student';
+  String _department = 'Computer Science';
+  int _semester = 5;
+  List<Map<String, dynamic>> _updates = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserData();
+    _fetchUpdates();
+  }
+
+  Future<void> _loadUserData() async {
+    try {
+      final isLoggedIn = await AuthService().isLoggedIn();
+      if (isLoggedIn) {
+        final response = await AuthService().getProfile();
+        final user = response['user'];
+        if (mounted) {
+          setState(() {
+            _userName = user['full_name'] ?? 'Student';
+            _department = user['department'] ?? 'Computer Science';
+            _semester = user['semester'] ?? 5;
+          });
+        }
+      }
+    } catch (e) {
+      // Use defaults
+    }
+  }
+
+  Future<void> _fetchUpdates() async {
+    try {
+      final response = await ApiService().get('/circulars');
+      final circulars = response['circulars'] as List;
+      if (mounted && circulars.isNotEmpty) {
+        setState(() {
+          _updates = circulars.take(2).map((c) {
+            return {
+              'tag': c['is_important'] == true ? 'Important' : 'Academic',
+              'time': _timeAgo(DateTime.parse(c['created_at'])),
+              'title': c['title'] as String,
+              'desc': (c['description'] ?? '') as String,
+              'color': c['is_important'] == true
+                  ? AppColors.accentTeal
+                  : AppColors.accentPurple,
+            };
+          }).toList();
+        });
+      }
+    } catch (e) {
+      // Use static updates
+      setState(() {
+        _updates = [
+          {
+            'tag': 'Academic',
+            'time': '2h ago',
+            'title': 'Fall 2024 Registration Open',
+            'desc':
+                'Course registration is now open for all senior students. Check your allotted time slot.',
+            'color': AppColors.accentTeal
+          },
+          {
+            'tag': 'Event',
+            'time': '5h ago',
+            'title': 'Tech Fest 2024 Registrations',
+            'desc':
+                'Annual tech fest is around the corner. Register your team for hackathon and coding contests.',
+            'color': AppColors.accentPurple
+          },
+        ];
+      });
+    }
+  }
+
+  String _timeAgo(DateTime dt) {
+    final diff = DateTime.now().difference(dt);
+    if (diff.inDays > 0) return '${diff.inDays}d ago';
+    if (diff.inHours > 0) return '${diff.inHours}h ago';
+    if (diff.inMinutes > 0) return '${diff.inMinutes}m ago';
+    return 'just now';
+  }
 
   void _navigateTo(BuildContext context, Widget screen) {
     Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen));
@@ -35,23 +125,39 @@ class HomeScreen extends StatelessWidget {
           const SizedBox(height: 28),
           const SectionHeader(title: 'Latest Updates', actionText: 'View All'),
           const SizedBox(height: 16),
-          _buildUpdateCard(
-              context,
-              tc,
-              'Academic',
-              '2h ago',
-              'Fall 2024 Registration Open',
-              'Course registration is now open for all senior students. Check your allotted time slot.',
-              AppColors.accentTeal),
-          const SizedBox(height: 12),
-          _buildUpdateCard(
-              context,
-              tc,
-              'Event',
-              '5h ago',
-              'Tech Fest 2024 Registrations',
-              'Annual tech fest is around the corner. Register your team for hackathon and coding contests.',
-              AppColors.accentPurple),
+          ..._updates.map((u) {
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: _buildUpdateCard(
+                context,
+                tc,
+                u['tag'] as String,
+                u['time'] as String,
+                u['title'] as String,
+                u['desc'] as String,
+                u['color'] as Color,
+              ),
+            );
+          }),
+          if (_updates.isEmpty) ...[
+            _buildUpdateCard(
+                context,
+                tc,
+                'Academic',
+                '2h ago',
+                'Fall 2024 Registration Open',
+                'Course registration is now open for all senior students.',
+                AppColors.accentTeal),
+            const SizedBox(height: 12),
+            _buildUpdateCard(
+                context,
+                tc,
+                'Event',
+                '5h ago',
+                'Tech Fest 2024 Registrations',
+                'Annual tech fest is around the corner. Register your team.',
+                AppColors.accentPurple),
+          ],
         ],
       ),
     );
@@ -80,10 +186,10 @@ class HomeScreen extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Good Morning, Balakumaran 👋',
+                Text('Good Morning, $_userName 👋',
                     style: Theme.of(context).textTheme.titleMedium),
                 const SizedBox(height: 4),
-                Text('Computer Science • Semester 5',
+                Text('$_department • Semester $_semester',
                     style: Theme.of(context).textTheme.bodyMedium),
               ],
             ),
