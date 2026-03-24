@@ -31,9 +31,10 @@ class _ServicesScreenState extends State<ServicesScreen> {
           final s = ServiceItem.fromJson(j);
           return _ServiceDisplayData(
             s.name,
-            s.subtitle ?? '',
-            _iconFromName(s.iconName),
-            _gradientFromColors(s.gradientStart, s.gradientEnd),
+            s.subtitle ?? j['description'] ?? j['category'] ?? '',
+            _iconFromName(s.iconName) ?? _iconFromServiceName(s.name),
+            _gradientFromColors(s.gradientStart, s.gradientEnd) ??
+                _gradientFromCategory(j['category']),
           );
         }).toList();
         _isLoading = false;
@@ -46,7 +47,8 @@ class _ServicesScreenState extends State<ServicesScreen> {
     }
   }
 
-  IconData _iconFromName(String? name) {
+  IconData? _iconFromName(String? name) {
+    if (name == null) return null;
     const iconMap = {
       'fastfood_rounded': Icons.fastfood_rounded,
       'account_balance_wallet_rounded': Icons.account_balance_wallet_rounded,
@@ -55,10 +57,26 @@ class _ServicesScreenState extends State<ServicesScreen> {
       'print_rounded': Icons.print_rounded,
       'local_hospital_rounded': Icons.local_hospital_rounded,
     };
-    return iconMap[name] ?? Icons.miscellaneous_services_rounded;
+    return iconMap[name];
   }
 
-  LinearGradient _gradientFromColors(String? start, String? end) {
+  IconData _iconFromServiceName(String name) {
+    final lower = name.toLowerCase();
+    if (lower.contains('library')) return Icons.menu_book_rounded;
+    if (lower.contains('health') || lower.contains('medical')) return Icons.local_hospital_rounded;
+    if (lower.contains('it') || lower.contains('help') || lower.contains('tech')) return Icons.computer_rounded;
+    if (lower.contains('cafeteria') || lower.contains('food') || lower.contains('canteen')) return Icons.fastfood_rounded;
+    if (lower.contains('sport') || lower.contains('gym')) return Icons.sports_soccer_rounded;
+    if (lower.contains('laundry')) return Icons.local_laundry_service_rounded;
+    if (lower.contains('print') || lower.contains('xerox')) return Icons.print_rounded;
+    if (lower.contains('hostel')) return Icons.hotel_rounded;
+    if (lower.contains('transport') || lower.contains('bus')) return Icons.directions_bus_rounded;
+    if (lower.contains('pay') || lower.contains('wallet') || lower.contains('fee')) return Icons.account_balance_wallet_rounded;
+    return Icons.miscellaneous_services_rounded;
+  }
+
+  LinearGradient? _gradientFromColors(String? start, String? end) {
+    if (start == null && end == null) return null;
     Color parseHex(String? hex, Color fallback) {
       if (hex == null || hex.isEmpty) return fallback;
       hex = hex.replaceFirst('#', '');
@@ -71,6 +89,23 @@ class _ServicesScreenState extends State<ServicesScreen> {
         parseHex(end, const Color(0xFF00F0B5))
       ],
     );
+  }
+
+  LinearGradient _gradientFromCategory(String? category) {
+    switch (category?.toLowerCase()) {
+      case 'academic':
+        return const LinearGradient(colors: [Color(0xFF6366F1), Color(0xFF818CF8)]);
+      case 'health':
+        return const LinearGradient(colors: [Color(0xFF22C55E), Color(0xFF4ADE80)]);
+      case 'tech':
+        return const LinearGradient(colors: [Color(0xFF14B8A6), Color(0xFF2DD4BF)]);
+      case 'food':
+        return const LinearGradient(colors: [Color(0xFFFF6B35), Color(0xFFF7931E)]);
+      case 'recreation':
+        return const LinearGradient(colors: [Color(0xFFF59E0B), Color(0xFFFBBF24)]);
+      default:
+        return const LinearGradient(colors: [Color(0xFFEC4899), Color(0xFFF472B6)]);
+    }
   }
 
   List<_ServiceDisplayData> _staticServices() {
@@ -109,7 +144,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
         child: SafeArea(
           child: Column(
             children: [
-              _buildAppBar(context, tc),
+              const GlassAppBar(title: 'Services'),
               Expanded(
                 child: _isLoading
                     ? const Center(
@@ -128,25 +163,6 @@ class _ServicesScreenState extends State<ServicesScreen> {
             ],
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildAppBar(BuildContext context, Tc tc) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(8, 8, 20, 8),
-      child: Row(
-        children: [
-          IconButton(
-              icon: Icon(Icons.arrow_back_rounded, color: tc.textPrimary),
-              onPressed: () => Navigator.pop(context)),
-          const SizedBox(width: 4),
-          Text('Services',
-              style: TextStyle(
-                  color: tc.textPrimary,
-                  fontSize: 20,
-                  fontWeight: FontWeight.w700)),
-        ],
       ),
     );
   }

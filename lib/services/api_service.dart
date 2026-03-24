@@ -1,12 +1,29 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:http/http.dart' as http;
 import 'auth_service.dart';
 
 /// Central API service for all backend HTTP calls.
 class ApiService {
-  // Change this to your backend URL (use 10.0.2.2 for Android emulator localhost)
-  static const String baseUrl = 'http://10.0.2.2:3000/api/v1';
+  // ── Base URL auto-detection ──
+  // Android emulator uses 10.0.2.2 to reach host localhost.
+  // Windows, web, iOS simulator, and physical devices use localhost.
+  // Production: set _isProduction to true and use your Render URL.
+  static const bool _isProduction = false;
+  static const String _prodUrl = 'https://punova-api.onrender.com/api/v1';
+
+  static String get baseUrl {
+    if (_isProduction) return _prodUrl;
+    if (kIsWeb) return 'http://localhost:3000/api/v1';
+    // Physical Android/iOS device: use your PC's LAN IP
+    // Android emulator would use 10.0.2.2, but physical device needs real IP
+    if (Platform.isAndroid || Platform.isIOS) {
+      return 'http://10.58.22.232:3000/api/v1';
+    }
+    // Windows, macOS, Linux desktop
+    return 'http://localhost:3000/api/v1';
+  }
 
   static final ApiService _instance = ApiService._internal();
   factory ApiService() => _instance;

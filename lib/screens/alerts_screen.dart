@@ -319,7 +319,7 @@ class _AlertsScreenState extends State<AlertsScreen>
       onRefresh: _fetchAll,
       color: AppColors.accentTeal,
       child: ListView.builder(
-        padding: const EdgeInsets.symmetric(horizontal: 20),
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
         itemCount: _allAlerts.length,
         itemBuilder: (_, i) {
           final alert = _allAlerts[i];
@@ -345,7 +345,7 @@ class _AlertsScreenState extends State<AlertsScreen>
       onRefresh: _fetchAll,
       color: AppColors.accentTeal,
       child: ListView.builder(
-        padding: const EdgeInsets.symmetric(horizontal: 20),
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
         itemCount: _academicAlerts.length,
         itemBuilder: (_, i) {
           final alert = _academicAlerts[i];
@@ -372,7 +372,7 @@ class _AlertsScreenState extends State<AlertsScreen>
                 onRefresh: _fetchAll,
                 color: AppColors.accentTeal,
                 child: ListView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
                   itemCount: _lostFoundItems.length,
                   itemBuilder: (_, i) {
                     final item = _lostFoundItems[i];
@@ -420,7 +420,7 @@ class _AlertsScreenState extends State<AlertsScreen>
       onRefresh: _fetchAll,
       color: AppColors.accentTeal,
       child: ListView.builder(
-        padding: const EdgeInsets.symmetric(horizontal: 20),
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
         itemCount: _emergencyAlerts.length,
         itemBuilder: (_, i) {
           final alert = _emergencyAlerts[i];

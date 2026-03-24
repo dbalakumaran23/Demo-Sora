@@ -12,6 +12,15 @@ class AuthService {
 
   String? _cachedToken;
   Map<String, dynamic>? _cachedUser;
+  bool _isGuest = false;
+
+  /// Whether the current session is a guest (restricted) session.
+  bool get isGuest => _isGuest;
+
+  /// Start a guest session — no backend call, just sets the flag.
+  void loginAsGuest() {
+    _isGuest = true;
+  }
 
   /// Get stored JWT token.
   Future<String?> getToken() async {
@@ -33,8 +42,8 @@ class AuthService {
     required String password,
     required String fullName,
     String? department,
-    int? year,
-    int? semester,
+    String? year,
+    String? semester,
     String? rollNumber,
   }) async {
     final response = await ApiService().post('/auth/register', body: {
@@ -83,13 +92,14 @@ class AuthService {
   /// Get cached user data.
   Map<String, dynamic>? get currentUser => _cachedUser;
 
-  /// Logout — clear stored token.
+  /// Logout — clear stored token and guest flag.
   Future<void> logout() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_tokenKey);
     await prefs.remove(_userKey);
     _cachedToken = null;
     _cachedUser = null;
+    _isGuest = false;
   }
 
   /// Save token and user to SharedPreferences.

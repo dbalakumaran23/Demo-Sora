@@ -181,7 +181,7 @@ class _ResultScreenState extends State<ResultScreen> {
         child: SafeArea(
           child: Column(
             children: [
-              _buildAppBar(context, tc),
+              const GlassAppBar(title: 'Results'),
               Expanded(
                 child: RefreshIndicator(
                   onRefresh: () {
@@ -218,25 +218,6 @@ class _ResultScreenState extends State<ResultScreen> {
             ],
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildAppBar(BuildContext context, Tc tc) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(8, 8, 20, 8),
-      child: Row(
-        children: [
-          IconButton(
-              icon: Icon(Icons.arrow_back_rounded, color: tc.textPrimary),
-              onPressed: () => Navigator.pop(context)),
-          const SizedBox(width: 4),
-          Text('Results',
-              style: TextStyle(
-                  color: tc.textPrimary,
-                  fontSize: 20,
-                  fontWeight: FontWeight.w700)),
-        ],
       ),
     );
   }

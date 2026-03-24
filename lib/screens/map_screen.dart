@@ -135,7 +135,8 @@ class _MapScreenState extends State<MapScreen> {
         dest != null ? _distanceMetres(_myLocation, dest.position) : 0.0;
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 100),
+      physics: const BouncingScrollPhysics(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

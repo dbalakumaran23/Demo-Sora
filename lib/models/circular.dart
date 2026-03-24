@@ -20,7 +20,8 @@ class Circular {
       id: json['id'],
       title: json['title'],
       description: json['description'],
-      publishedDate: DateTime.parse(json['published_date']),
+      publishedDate: DateTime.parse(
+          json['published_date'] ?? json['created_at'] ?? DateTime.now().toIso8601String()),
       isImportant: json['is_important'] ?? false,
       attachmentUrl: json['attachment_url'],
     );

@@ -2,6 +2,11 @@ import 'dart:io';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:package_info_plus/package_info_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:local_auth/local_auth.dart';
 import '../theme/app_theme.dart';
 import '../widgets/glass_widgets.dart';
 import '../main.dart';
@@ -20,6 +25,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String _fontSizeLabel = 'Medium';
   double _fontSizeValue = 1.0; // 0=Small, 1=Medium, 2=Large
   bool _appLockEnabled = false;
+  String _appVersion = '1.0.0';
+  String _appBuild = '';
 
   // ── Profile data from API ──
   Map<String, dynamic>? _user;
@@ -32,18 +39,42 @@ class _ProfileScreenState extends State<ProfileScreen> {
   void initState() {
     super.initState();
     _loadProfile();
+    _loadPersistedSettings();
+    _loadPackageInfo();
+  }
+
+  Future<void> _loadPersistedSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (mounted) {
+      setState(() {
+        _appLockEnabled = prefs.getBool('app_lock_enabled') ?? false;
+      });
+    }
+  }
+
+  Future<void> _loadPackageInfo() async {
+    try {
+      final info = await PackageInfo.fromPlatform();
+      if (mounted) {
+        setState(() {
+          _appVersion = info.version;
+          _appBuild = info.buildNumber;
+        });
+      }
+    } catch (_) {}
   }
 
   Future<void> _loadProfile() async {
     try {
-      final user = await AuthService().getProfile();
-      if (user != null && mounted) {
+      final response = await AuthService().getProfile();
+      final user = response['user'] as Map<String, dynamic>?;
+      if (mounted && user != null) {
         setState(() {
           _user = user;
           _profileName = user['full_name'] ?? user['name'] ?? 'Student';
           _profileEmail = user['email'] ?? '';
           _profileDept = user['department'] ?? 'CS';
-          _profileSemester = user['semester'] ?? 0;
+          _profileSemester = int.tryParse(user['semester']?.toString() ?? '') ?? 0;
         });
       }
     } catch (_) {
@@ -412,8 +443,44 @@ class _ProfileScreenState extends State<ProfileScreen> {
   // 4. CLEAR CACHE
   // ═══════════════════════════════════════════════════════════════════════════
 
-  void _showClearCacheDialog(BuildContext context) {
+  Future<String> _getCacheSize() async {
+    try {
+      if (kIsWeb) return '0 KB';
+      final tempDir = await getTemporaryDirectory();
+      int totalSize = 0;
+      if (tempDir.existsSync()) {
+        for (final entity in tempDir.listSync(recursive: true, followLinks: false)) {
+          if (entity is File) {
+            totalSize += await entity.length();
+          }
+        }
+      }
+      if (totalSize < 1024) return '$totalSize B';
+      if (totalSize < 1024 * 1024) return '${(totalSize / 1024).toStringAsFixed(1)} KB';
+      return '${(totalSize / (1024 * 1024)).toStringAsFixed(1)} MB';
+    } catch (_) {
+      return 'unknown';
+    }
+  }
+
+  Future<void> _clearCache() async {
+    try {
+      if (kIsWeb) return;
+      final tempDir = await getTemporaryDirectory();
+      if (tempDir.existsSync()) {
+        for (final entity in tempDir.listSync(followLinks: false)) {
+          try {
+            entity.deleteSync(recursive: true);
+          } catch (_) {}
+        }
+      }
+    } catch (_) {}
+  }
+
+  void _showClearCacheDialog(BuildContext context) async {
     final tc = Tc.of(context);
+    final cacheSize = await _getCacheSize();
+    if (!context.mounted) return;
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -422,7 +489,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         title: Text('Clear Cache',
             style:
                 TextStyle(color: tc.textPrimary, fontWeight: FontWeight.w700)),
-        content: Text('This will clear all cached data (52 MB). Continue?',
+        content: Text('This will clear all cached data ($cacheSize). Continue?',
             style: TextStyle(color: tc.textSecondary)),
         actions: [
           TextButton(
@@ -430,15 +497,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
             child: Text('Cancel', style: TextStyle(color: tc.textMuted)),
           ),
           TextButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                content: const Text('Cache cleared successfully'),
-                backgroundColor: AppColors.accentGreen,
-                behavior: SnackBarBehavior.floating,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
-              ));
+              await _clearCache();
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                  content: const Text('Cache cleared successfully'),
+                  backgroundColor: AppColors.accentGreen,
+                  behavior: SnackBarBehavior.floating,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                ));
+              }
             },
             child: const Text('Clear',
                 style: TextStyle(
@@ -453,38 +523,39 @@ class _ProfileScreenState extends State<ProfileScreen> {
   // 5. MANAGE DOWNLOADED CIRCULARS
   // ═══════════════════════════════════════════════════════════════════════════
 
-  void _showDownloadedCircularsSheet(BuildContext context) {
-    final circulars = [
-      {
-        'title': 'Exam Schedule – Feb 2026',
-        'size': '1.2 MB',
-        'date': '10 Feb 2026'
-      },
-      {
-        'title': 'Holiday List 2025-26',
-        'size': '340 KB',
-        'date': '05 Jan 2026'
-      },
-      {
-        'title': 'Hostel Fee Structure',
-        'size': '890 KB',
-        'date': '22 Dec 2025'
-      },
-      {
-        'title': 'Library Rules Update',
-        'size': '220 KB',
-        'date': '15 Nov 2025'
-      },
-      {
-        'title': 'Semester Registration',
-        'size': '1.5 MB',
-        'date': '01 Oct 2025'
-      },
-    ];
+  Future<List<Map<String, String>>> _getDownloadedFiles() async {
+    try {
+      if (kIsWeb) return [];
+      final appDir = await getApplicationDocumentsDirectory();
+      final downloadDir = Directory('${appDir.path}/circulars');
+      if (!downloadDir.existsSync()) return [];
+      final files = downloadDir.listSync().whereType<File>().toList();
+      files.sort((a, b) => b.statSync().modified.compareTo(a.statSync().modified));
+      return files.map((f) {
+        final stat = f.statSync();
+        final sizeKb = stat.size / 1024;
+        final sizeStr = sizeKb > 1024
+            ? '${(sizeKb / 1024).toStringAsFixed(1)} MB'
+            : '${sizeKb.toStringAsFixed(0)} KB';
+        final modified = stat.modified;
+        final dateStr = '${modified.day.toString().padLeft(2, '0')} '
+            '${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][modified.month - 1]} '
+            '${modified.year}';
+        final name = f.path.split(Platform.pathSeparator).last;
+        return {'title': name.replaceAll('.pdf', '').replaceAll('_', ' '), 'size': sizeStr, 'date': dateStr, 'path': f.path};
+      }).toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  void _showDownloadedCircularsSheet(BuildContext context) async {
+    final files = await _getDownloadedFiles();
+    if (!context.mounted) return;
 
     _showThemedSheet(context, 'Downloaded Circulars', (tc) {
       return StatefulBuilder(builder: (ctx, setLocal) {
-        if (circulars.isEmpty) {
+        if (files.isEmpty) {
           return Padding(
             padding: const EdgeInsets.symmetric(vertical: 40),
             child: Column(
@@ -493,13 +564,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 const SizedBox(height: 12),
                 Text('No downloaded circulars',
                     style: TextStyle(color: tc.textMuted, fontSize: 14)),
+                const SizedBox(height: 8),
+                Text('Downloads will appear here when you\nsave circulars for offline reading.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: tc.textMuted, fontSize: 12)),
               ],
             ),
           );
         }
         return Column(
           children: [
-            ...circulars.map((c) => Container(
+            ...files.map((c) => Container(
                   margin: const EdgeInsets.only(bottom: 10),
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
@@ -538,7 +613,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                       GestureDetector(
                         onTap: () {
-                          setLocal(() => circulars.remove(c));
+                          try {
+                            File(c['path']!).deleteSync();
+                          } catch (_) {}
+                          setLocal(() => files.remove(c));
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
                               content: Text('Deleted: ${c['title']}'),
@@ -566,24 +644,60 @@ class _ProfileScreenState extends State<ProfileScreen> {
   // ═══════════════════════════════════════════════════════════════════════════
 
   void _showReportIssueSheet(BuildContext context) {
+    final subjectCtrl = TextEditingController();
+    final descCtrl = TextEditingController();
+    bool isSubmitting = false;
+
     _showThemedSheet(context, 'Report Issue', (tc) {
-      return Column(
-        children: [
-          _sheetField(tc, 'Subject'),
-          _sheetField(tc, 'Describe the issue...', maxLines: 5),
-          const SizedBox(height: 4),
-          _sheetButton('Submit Report', () {
-            Navigator.pop(context);
-            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-              content: const Text('Issue reported — thank you!'),
-              backgroundColor: AppColors.accentGreen,
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
-            ));
-          }),
-        ],
-      );
+      return StatefulBuilder(builder: (ctx, setLocal) {
+        return Column(
+          children: [
+            _sheetField(tc, 'Subject', controller: subjectCtrl),
+            _sheetField(tc, 'Describe the issue...', maxLines: 5, controller: descCtrl),
+            const SizedBox(height: 4),
+            _sheetButton(isSubmitting ? 'Submitting...' : 'Submit Report', () async {
+              if (subjectCtrl.text.trim().isEmpty || descCtrl.text.trim().isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                  content: const Text('Please fill in both fields'),
+                  backgroundColor: AppColors.accentRed,
+                  behavior: SnackBarBehavior.floating,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                ));
+                return;
+              }
+              setLocal(() => isSubmitting = true);
+              try {
+                // Try submitting to backend first
+                await ApiService().post('/reports', body: {
+                  'subject': subjectCtrl.text.trim(),
+                  'description': descCtrl.text.trim(),
+                  'type': 'bug_report',
+                });
+              } catch (_) {
+                // Fallback: open email client
+                final emailUri = Uri(
+                  scheme: 'mailto',
+                  path: 'admin@pondiuni.edu.in',
+                  query: 'subject=${Uri.encodeComponent('Bug Report: ${subjectCtrl.text.trim()}')}'
+                      '&body=${Uri.encodeComponent(descCtrl.text.trim())}',
+                );
+                try { await launchUrl(emailUri); } catch (_) {}
+              }
+              if (context.mounted) {
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                  content: const Text('Issue reported — thank you!'),
+                  backgroundColor: AppColors.accentGreen,
+                  behavior: SnackBarBehavior.floating,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                ));
+              }
+            }),
+          ],
+        );
+      });
     });
   }
 
@@ -595,23 +709,64 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _showThemedSheet(context, 'Contact Admin', (tc) {
       return Column(
         children: [
-          _contactRow(
-              tc, Icons.email_rounded, 'Email', 'admin@pondiuni.edu.in'),
-          _contactRow(tc, Icons.phone_rounded, 'Phone', '+91 413 265 5179'),
+          GestureDetector(
+            onTap: () async {
+              final uri = Uri(scheme: 'mailto', path: 'admin@pondiuni.edu.in');
+              try { await launchUrl(uri); } catch (_) {}
+            },
+            child: _contactRow(
+                tc, Icons.email_rounded, 'Email', 'admin@pondiuni.edu.in'),
+          ),
+          GestureDetector(
+            onTap: () async {
+              final uri = Uri(scheme: 'tel', path: '+914132655179');
+              try { await launchUrl(uri); } catch (_) {}
+            },
+            child: _contactRow(tc, Icons.phone_rounded, 'Phone', '+91 413 265 5179'),
+          ),
           _contactRow(tc, Icons.access_time_rounded, 'Office Hours',
               'Mon – Fri, 9:00 AM – 5:00 PM'),
           _contactRow(tc, Icons.location_on_rounded, 'Address',
               'Pondicherry University, R.V. Nagar,\nKalapet, Puducherry – 605014'),
           const SizedBox(height: 16),
-          _sheetButton('Send Email', () {
-            Navigator.pop(context);
-            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-              content: const Text('Opening email client...'),
-              backgroundColor: AppColors.accentTeal,
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
-            ));
+          _sheetButton('Send Email', () async {
+            final emailUri = Uri(
+              scheme: 'mailto',
+              path: 'admin@pondiuni.edu.in',
+              query: 'subject=${Uri.encodeComponent('PUnova App Query')}',
+            );
+            try {
+              await launchUrl(emailUri);
+            } catch (_) {
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                  content: const Text('Could not open email client'),
+                  backgroundColor: AppColors.accentRed,
+                  behavior: SnackBarBehavior.floating,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                ));
+              }
+            }
+            if (context.mounted) Navigator.pop(context);
+          }),
+          const SizedBox(height: 8),
+          _sheetButton('Call Admin', () async {
+            final phoneUri = Uri(scheme: 'tel', path: '+914132655179');
+            try {
+              await launchUrl(phoneUri);
+            } catch (_) {
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                  content: const Text('Could not open dialer'),
+                  backgroundColor: AppColors.accentRed,
+                  behavior: SnackBarBehavior.floating,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                ));
+              }
+            }
+            if (context.mounted) Navigator.pop(context);
           }),
         ],
       );
@@ -739,6 +894,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   void _showAppVersionDialog(BuildContext context) {
     final tc = Tc.of(context);
+    final platformName = kIsWeb ? 'Web' : Platform.operatingSystem[0].toUpperCase() + Platform.operatingSystem.substring(1);
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -763,9 +919,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _versionRow(tc, 'Version', '1.0.0'),
-            _versionRow(tc, 'Build', '2026.02.21'),
-            _versionRow(tc, 'Platform', 'Flutter'),
+            _versionRow(tc, 'Version', _appVersion),
+            _versionRow(tc, 'Build', _appBuild.isNotEmpty ? _appBuild : 'dev'),
+            _versionRow(tc, 'Platform', 'Flutter ($platformName)'),
             _versionRow(tc, 'Developer', 'Pondicherry University'),
             const SizedBox(height: 12),
             Text('© 2026 Pondicherry University.\nAll rights reserved.',
@@ -969,7 +1125,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final profileImage = themeNotifier.profileImagePath;
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 100),
+      physics: const BouncingScrollPhysics(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1103,20 +1260,53 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 onTap: () => _showChangePasswordSheet(context)),
             GlassListTile(
               icon: Icons.fingerprint_rounded,
-              title: 'App Lock (PIN / Fingerprint)',
+              title: 'App Lock (Fingerprint / PIN)',
+              subtitle: _appLockEnabled ? 'Enabled' : 'Disabled',
               iconColor: AppColors.accentOrange,
               trailing: Switch(
                 value: _appLockEnabled,
-                onChanged: (v) {
+                onChanged: (v) async {
+                  if (v) {
+                    // Check if biometrics are available
+                    final auth = LocalAuthentication();
+                    final canAuth = await auth.canCheckBiometrics || await auth.isDeviceSupported();
+                    if (!canAuth) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                          content: const Text('No biometric or screen lock set up on this device'),
+                          backgroundColor: AppColors.accentRed,
+                          behavior: SnackBarBehavior.floating,
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12)),
+                        ));
+                      }
+                      return;
+                    }
+                    // Verify identity before enabling
+                    try {
+                      final didAuth = await auth.authenticate(
+                        localizedReason: 'Verify your identity to enable App Lock',
+                      );
+                      if (!didAuth) return;
+                    } catch (_) {
+                      return;
+                    }
+                  }
                   setState(() => _appLockEnabled = v);
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                    content: Text(v ? 'App Lock enabled' : 'App Lock disabled'),
-                    backgroundColor:
-                        v ? AppColors.accentGreen : AppColors.accentOrange,
-                    behavior: SnackBarBehavior.floating,
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
-                  ));
+                  final prefs = await SharedPreferences.getInstance();
+                  await prefs.setBool('app_lock_enabled', v);
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                      content: Text(v
+                          ? 'App Lock enabled — you\'ll need to authenticate on next launch'
+                          : 'App Lock disabled'),
+                      backgroundColor:
+                          v ? AppColors.accentGreen : AppColors.accentOrange,
+                      behavior: SnackBarBehavior.floating,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                    ));
+                  }
                 },
                 activeThumbColor: AppColors.accentTeal,
                 activeTrackColor: AppColors.accentTeal.withValues(alpha: 0.3),
@@ -1159,7 +1349,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             GlassListTile(
                 icon: Icons.info_rounded,
                 title: 'App Version',
-                subtitle: '1.0.0',
+                subtitle: _appVersion,
                 iconColor: AppColors.textMuted,
                 onTap: () => _showAppVersionDialog(context)),
             GlassListTile(
@@ -1173,6 +1363,76 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 iconColor: AppColors.textMuted,
                 onTap: () => _showPrivacyPolicySheet(context)),
           ]),
+
+          // ── Logout ──
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            child: GlassCard(
+              padding: EdgeInsets.zero,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(18),
+                onTap: () => _showLogoutDialog(context),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                      vertical: 16, horizontal: 20),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.logout_rounded,
+                          color: AppColors.accentRed, size: 20),
+                      const SizedBox(width: 10),
+                      Text('Log Out',
+                          style: TextStyle(
+                              color: AppColors.accentRed,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700)),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+        ],
+      ),
+    );
+  }
+
+  void _showLogoutDialog(BuildContext context) {
+    final tc = Tc.of(context);
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: tc.bgCard,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text('Log Out',
+            style: TextStyle(
+                color: tc.textPrimary, fontWeight: FontWeight.w700)),
+        content: Text('Are you sure you want to log out?',
+            style: TextStyle(color: tc.textSecondary)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('Cancel', style: TextStyle(color: tc.textMuted)),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              await AuthService().logout();
+              if (context.mounted) {
+                Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
+                  MaterialPageRoute(
+                      builder: (_) => const CampusConnectApp()),
+                  (route) => false,
+                );
+              }
+            },
+            child: const Text('Log Out',
+                style: TextStyle(
+                    color: AppColors.accentRed,
+                    fontWeight: FontWeight.w700)),
+          ),
         ],
       ),
     );

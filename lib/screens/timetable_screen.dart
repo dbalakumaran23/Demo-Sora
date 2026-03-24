@@ -105,7 +105,7 @@ class _TimetableScreenState extends State<TimetableScreen> {
         child: SafeArea(
           child: Column(
             children: [
-              _buildAppBar(context, tc),
+              const GlassAppBar(title: 'Timetable'),
               const SizedBox(height: 8),
               _buildDaySelector(tc),
               const SizedBox(height: 16),
@@ -128,25 +128,6 @@ class _TimetableScreenState extends State<TimetableScreen> {
             ],
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildAppBar(BuildContext context, Tc tc) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(8, 8, 20, 8),
-      child: Row(
-        children: [
-          IconButton(
-              icon: Icon(Icons.arrow_back_rounded, color: tc.textPrimary),
-              onPressed: () => Navigator.pop(context)),
-          const SizedBox(width: 4),
-          Text('Timetable',
-              style: TextStyle(
-                  color: tc.textPrimary,
-                  fontSize: 20,
-                  fontWeight: FontWeight.w700)),
-        ],
       ),
     );
   }

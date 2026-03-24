@@ -36,11 +36,11 @@ class _HomeScreenState extends State<HomeScreen> {
       if (isLoggedIn) {
         final response = await AuthService().getProfile();
         final user = response['user'];
-        if (mounted) {
+        if (mounted && user != null) {
           setState(() {
             _userName = user['full_name'] ?? 'Student';
             _department = user['department'] ?? 'Computer Science';
-            _semester = user['semester'] ?? 5;
+            _semester = int.tryParse(user['semester']?.toString() ?? '') ?? 0;
           });
         }
       }
@@ -55,7 +55,7 @@ class _HomeScreenState extends State<HomeScreen> {
       final circulars = response['circulars'] as List;
       if (mounted && circulars.isNotEmpty) {
         setState(() {
-          _updates = circulars.take(2).map((c) {
+          _updates = circulars.take(3).map((c) {
             return {
               'tag': c['is_important'] == true ? 'Important' : 'Academic',
               'time': _timeAgo(DateTime.parse(c['created_at'])),
@@ -69,7 +69,6 @@ class _HomeScreenState extends State<HomeScreen> {
         });
       }
     } catch (e) {
-      // Use static updates
       setState(() {
         _updates = [
           {
@@ -102,34 +101,45 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _navigateTo(BuildContext context, Widget screen) {
-    Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen));
+    Navigator.of(context).push(
+      PageRouteBuilder(
+        pageBuilder: (_, __, ___) => screen,
+        transitionsBuilder: (_, anim, __, child) {
+          return FadeTransition(
+            opacity: CurvedAnimation(parent: anim, curve: Curves.easeOut),
+            child: child,
+          );
+        },
+        transitionDuration: const Duration(milliseconds: 250),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final tc = Tc.of(context);
     return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 100),
+      physics: const BouncingScrollPhysics(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _buildGreeting(context, tc),
-          const SizedBox(height: 28),
+          const SizedBox(height: 30),
           const SectionHeader(title: 'Quick Access'),
           const SizedBox(height: 16),
           _buildQuickAccess(context),
-          const SizedBox(height: 28),
+          const SizedBox(height: 30),
           const SectionHeader(title: 'Academics'),
           const SizedBox(height: 16),
           _buildAcademics(context, tc),
-          const SizedBox(height: 28),
-          const SectionHeader(title: 'Latest Updates', actionText: 'View All'),
+          const SizedBox(height: 30),
+          const SectionHeader(title: 'Latest Updates', actionText: 'See All'),
           const SizedBox(height: 16),
           ..._updates.map((u) {
             return Padding(
               padding: const EdgeInsets.only(bottom: 12),
               child: _buildUpdateCard(
-                context,
                 tc,
                 u['tag'] as String,
                 u['time'] as String,
@@ -140,20 +150,12 @@ class _HomeScreenState extends State<HomeScreen> {
             );
           }),
           if (_updates.isEmpty) ...[
-            _buildUpdateCard(
-                context,
-                tc,
-                'Academic',
-                '2h ago',
+            _buildUpdateCard(tc, 'Academic', '2h ago',
                 'Fall 2024 Registration Open',
                 'Course registration is now open for all senior students.',
                 AppColors.accentTeal),
             const SizedBox(height: 12),
-            _buildUpdateCard(
-                context,
-                tc,
-                'Event',
-                '5h ago',
+            _buildUpdateCard(tc, 'Event', '5h ago',
                 'Tech Fest 2024 Registrations',
                 'Annual tech fest is around the corner. Register your team.',
                 AppColors.accentPurple),
@@ -164,33 +166,49 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildGreeting(BuildContext context, Tc tc) {
+    final hour = DateTime.now().hour;
+    final greeting = hour < 12 ? 'Good Morning' : (hour < 17 ? 'Good Afternoon' : 'Good Evening');
+
     return GlassCard(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(20),
       child: Row(
         children: [
           Container(
-            width: 50,
-            height: 50,
+            width: 52,
+            height: 52,
             decoration: BoxDecoration(
-              gradient: AppColors.warmGradient,
+              gradient: AppColors.primaryGradient,
               borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.accentTeal.withValues(alpha: 0.25),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                ),
+              ],
             ),
-            child: CircleAvatar(
-              radius: 24,
-              backgroundColor: tc.bgMedium,
-              child: Icon(Icons.person_rounded, size: 28, color: tc.textMuted),
-            ),
+            child: const Icon(Icons.person_rounded,
+                size: 28, color: Colors.white),
           ),
-          const SizedBox(width: 14),
+          const SizedBox(width: 16),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Good Morning, $_userName 👋',
-                    style: Theme.of(context).textTheme.titleMedium),
+                Text(
+                  '$greeting, $_userName',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontSize: 18,
+                        letterSpacing: -0.2,
+                      ),
+                ),
                 const SizedBox(height: 4),
-                Text('$_department • Semester $_semester',
-                    style: Theme.of(context).textTheme.bodyMedium),
+                Text(
+                   _semester > 0
+                       ? '$_department  •  Semester $_semester'
+                       : _department,
+                   style: TextStyle(color: tc.textMuted, fontSize: 13),
+                 ),
               ],
             ),
           ),
@@ -198,11 +216,12 @@ class _HomeScreenState extends State<HomeScreen> {
             width: 40,
             height: 40,
             decoration: BoxDecoration(
-              color: tc.glassWhite,
+              color: tc.glassFill,
               borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: tc.glassBorder, width: 0.5),
             ),
             child: Icon(Icons.notifications_none_rounded,
-                color: tc.textSecondary, size: 22),
+                color: tc.textSecondary, size: 20),
           ),
         ],
       ),
@@ -211,7 +230,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildQuickAccess(BuildContext context) {
     return GlassCard(
-      padding: const EdgeInsets.symmetric(vertical: 22, horizontal: 16),
+      padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 12),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
@@ -252,72 +271,30 @@ class _HomeScreenState extends State<HomeScreen> {
     return Row(
       children: [
         Expanded(
-          child: GestureDetector(
+          child: _AcademicTile(
+            icon: Icons.schedule_rounded,
+            title: 'Timetable',
+            subtitle: 'View schedule',
+            gradient: AppColors.primaryGradient,
             onTap: () => _navigateTo(context, const TimetableScreen()),
-            child: GlassCard(
-              padding: const EdgeInsets.all(18),
-              child: Column(
-                children: [
-                  Container(
-                    width: 48,
-                    height: 48,
-                    decoration: BoxDecoration(
-                        gradient: AppColors.primaryGradient,
-                        borderRadius: BorderRadius.circular(14)),
-                    child: const Icon(Icons.schedule_rounded,
-                        color: Colors.white, size: 24),
-                  ),
-                  const SizedBox(height: 12),
-                  Text('Timetable',
-                      style: TextStyle(
-                          color: tc.textPrimary,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 14)),
-                  const SizedBox(height: 4),
-                  Text('View schedule',
-                      style: TextStyle(color: tc.textMuted, fontSize: 11)),
-                ],
-              ),
-            ),
           ),
         ),
         const SizedBox(width: 14),
         Expanded(
-          child: GestureDetector(
+          child: _AcademicTile(
+            icon: Icons.assessment_rounded,
+            title: 'Results',
+            subtitle: 'View grades',
+            gradient: AppColors.purpleGradient,
             onTap: () => _navigateTo(context, const ResultScreen()),
-            child: GlassCard(
-              padding: const EdgeInsets.all(18),
-              child: Column(
-                children: [
-                  Container(
-                    width: 48,
-                    height: 48,
-                    decoration: BoxDecoration(
-                        gradient: AppColors.purpleGradient,
-                        borderRadius: BorderRadius.circular(14)),
-                    child: const Icon(Icons.assessment_rounded,
-                        color: Colors.white, size: 24),
-                  ),
-                  const SizedBox(height: 12),
-                  Text('Results',
-                      style: TextStyle(
-                          color: tc.textPrimary,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 14)),
-                  const SizedBox(height: 4),
-                  Text('View grades',
-                      style: TextStyle(color: tc.textMuted, fontSize: 11)),
-                ],
-              ),
-            ),
           ),
         ),
       ],
     );
   }
 
-  Widget _buildUpdateCard(BuildContext context, Tc tc, String tag, String time,
-      String title, String desc, Color accent) {
+  Widget _buildUpdateCard(Tc tc, String tag, String time, String title,
+      String desc, Color accent) {
     return GlassCard(
       padding: const EdgeInsets.all(18),
       child: Column(
@@ -327,10 +304,11 @@ class _HomeScreenState extends State<HomeScreen> {
             children: [
               Container(
                 padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                 decoration: BoxDecoration(
-                    color: accent.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(8)),
+                  color: accent.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(8),
+                ),
                 child: Text(tag,
                     style: TextStyle(
                         color: accent,
@@ -341,17 +319,94 @@ class _HomeScreenState extends State<HomeScreen> {
               Text(time, style: TextStyle(color: tc.textMuted, fontSize: 11)),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 14),
           Text(title,
               style: TextStyle(
                   color: tc.textPrimary,
                   fontSize: 16,
-                  fontWeight: FontWeight.w600)),
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: -0.2)),
           const SizedBox(height: 6),
           Text(desc,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
               style: TextStyle(
                   color: tc.textSecondary, fontSize: 13, height: 1.5)),
         ],
+      ),
+    );
+  }
+}
+
+class _AcademicTile extends StatefulWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final LinearGradient gradient;
+  final VoidCallback onTap;
+
+  const _AcademicTile({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.gradient,
+    required this.onTap,
+  });
+
+  @override
+  State<_AcademicTile> createState() => _AcademicTileState();
+}
+
+class _AcademicTileState extends State<_AcademicTile> {
+  double _scale = 1.0;
+
+  @override
+  Widget build(BuildContext context) {
+    final tc = Tc.of(context);
+    return GestureDetector(
+      onTapDown: (_) => setState(() => _scale = 0.95),
+      onTapUp: (_) {
+        setState(() => _scale = 1.0);
+        widget.onTap();
+      },
+      onTapCancel: () => setState(() => _scale = 1.0),
+      child: AnimatedScale(
+        scale: _scale,
+        duration: const Duration(milliseconds: 120),
+        curve: Curves.easeOut,
+        child: GlassCard(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            children: [
+              Container(
+                width: 50,
+                height: 50,
+                decoration: BoxDecoration(
+                  gradient: widget.gradient,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: widget.gradient.colors.first
+                          .withValues(alpha: 0.25),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Icon(widget.icon, color: Colors.white, size: 24),
+              ),
+              const SizedBox(height: 14),
+              Text(widget.title,
+                  style: TextStyle(
+                      color: tc.textPrimary,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 15)),
+              const SizedBox(height: 4),
+              Text(widget.subtitle,
+                  style: TextStyle(color: tc.textMuted, fontSize: 12)),
+            ],
+          ),
+        ),
       ),
     );
   }

@@ -48,7 +48,7 @@ class _LostFoundScreenState extends State<LostFoundScreen> {
         child: SafeArea(
           child: Column(
             children: [
-              _buildAppBar(context, tc),
+              const GlassAppBar(title: 'Report Item'),
               _buildProgress(tc),
               Expanded(
                 child: SingleChildScrollView(
@@ -60,25 +60,6 @@ class _LostFoundScreenState extends State<LostFoundScreen> {
             ],
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildAppBar(BuildContext context, Tc tc) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(8, 8, 20, 8),
-      child: Row(
-        children: [
-          IconButton(
-              icon: Icon(Icons.arrow_back_rounded, color: tc.textPrimary),
-              onPressed: () => Navigator.pop(context)),
-          const SizedBox(width: 4),
-          Text('Report Item',
-              style: TextStyle(
-                  color: tc.textPrimary,
-                  fontSize: 20,
-                  fontWeight: FontWeight.w700)),
-        ],
       ),
     );
   }
@@ -498,12 +479,12 @@ class _LostFoundScreenState extends State<LostFoundScreen> {
 
       if (!mounted) return;
       setState(() => _isSubmitting = false);
-      _showSuccess(context, tc);
+      if (context.mounted) _showSuccess(context, tc);
     } catch (e) {
       setState(() => _isSubmitting = false);
       if (!mounted) return;
       // Still show success for graceful fallback (backend might be unavailable)
-      _showSuccess(context, tc);
+      if (context.mounted) _showSuccess(context, tc);
     }
   }
 

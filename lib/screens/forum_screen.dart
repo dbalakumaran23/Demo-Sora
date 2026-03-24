@@ -158,7 +158,7 @@ class _ForumScreenState extends State<ForumScreen> {
         child: SafeArea(
           child: Column(
             children: [
-              _buildAppBar(context, tc),
+              const GlassAppBar(title: 'Forum'),
               Expanded(
                 child: _isLoading
                     ? const Center(
@@ -189,25 +189,6 @@ class _ForumScreenState extends State<ForumScreen> {
           ),
           child: const Icon(Icons.edit_rounded, color: Colors.white),
         ),
-      ),
-    );
-  }
-
-  Widget _buildAppBar(BuildContext context, Tc tc) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(8, 8, 20, 8),
-      child: Row(
-        children: [
-          IconButton(
-              icon: Icon(Icons.arrow_back_rounded, color: tc.textPrimary),
-              onPressed: () => Navigator.pop(context)),
-          const SizedBox(width: 4),
-          Text('Forum',
-              style: TextStyle(
-                  color: tc.textPrimary,
-                  fontSize: 20,
-                  fontWeight: FontWeight.w700)),
-        ],
       ),
     );
   }

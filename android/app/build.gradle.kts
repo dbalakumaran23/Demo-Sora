@@ -14,10 +14,15 @@ val keystoreProperties = Properties()
 if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(FileInputStream(keystorePropertiesFile))
 }
+fun hasValidKeystore(): Boolean {
+    if (!keystorePropertiesFile.exists()) return false
+    val sf = keystoreProperties["storeFile"] as? String ?: return false
+    return sf.isNotEmpty() && rootProject.file(sf).exists()
+}
 
 android {
     namespace = "com.campusconnect.campus_connect"
-    compileSdk = 35
+    compileSdk = 36
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
@@ -31,7 +36,7 @@ android {
 
     defaultConfig {
         applicationId = "com.campusconnect.campus_connect"
-        minSdk = 23
+        minSdk = flutter.minSdkVersion
         targetSdk = 35
         versionCode = flutter.versionCode
         versionName = flutter.versionName
@@ -39,7 +44,7 @@ android {
 
     signingConfigs {
         create("release") {
-            if (keystorePropertiesFile.exists()) {
+            if (hasValidKeystore()) {
                 keyAlias = keystoreProperties["keyAlias"] as String
                 keyPassword = keystoreProperties["keyPassword"] as String
                 storeFile = file(keystoreProperties["storeFile"] as String)
@@ -50,7 +55,7 @@ android {
 
     buildTypes {
         release {
-            signingConfig = if (keystorePropertiesFile.exists()) {
+            signingConfig = if (hasValidKeystore()) {
                 signingConfigs.getByName("release")
             } else {
                 signingConfigs.getByName("debug")

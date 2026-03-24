@@ -13,3 +13,8 @@
 -keepclasseswithmembernames class * {
     native <methods>;
 }
+
+# R8 missing classes — Play Store deferred components
+-dontwarn com.google.android.play.core.splitcompat.SplitCompatApplication
+-dontwarn com.google.android.play.core.splitinstall.**
+-dontwarn com.google.android.play.core.tasks.**
